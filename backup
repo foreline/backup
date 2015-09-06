@@ -1,0 +1,139 @@
+#!/bin/bash
+
+#### CONFIG ####
+
+BACKUP_DIR=/var/www/backup
+
+DB_USER=
+DB_PASS=
+DB_NAME=
+
+################
+
+SITE_DIR=$PWD;
+SITE_ID=${PWD##*/};
+VHOSTS_DIR=$(dirname $SITE_DIR)
+
+BACKUP_DIR="${BACKUP_DIR}/${SITE_ID}";
+
+#### SCRIPT VARIABLES #####
+
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+NORMAL='\033[0m'
+
+################
+
+echo -n "Checking tools...";
+
+TAR=`which tar`
+GZIP=`which gzip`
+RM=`which rm`
+MYSQLDUMP=`which mysqldump`
+MKDIR=`which mkdir`
+
+if  ! type $TAR &> /dev/null; then
+	echo -en "$RED [FAILED]$NORMAL\n";
+	echo "TAR is not found";
+	exit 1;
+fi
+
+if ! type $RM &> /dev/null; then
+	echo -en "$RED [FAILED]$NORMAL\n";
+	echo "RM is not found";
+	exit 1;
+fi
+
+if ! type $MYSQLDUMP &> /dev/null; then
+	echo -en "$RED [FAILED]$NORMAL\n";
+	echo "MYSQLDUMP is not found";
+	exit 1;
+fi
+
+echo -en "$GREEN [OK]$NORMAL\n";
+
+################
+
+
+
+### MYSQL Dump
+
+TMP_NAME=`date +"%Y%m%d_%H%M%S"`.sql
+MYSQL_DUMP_FILE=${SITE_ID}_${TMP_NAME}
+
+echo -en "Creating mysql dump [${MYSQL_DUMP_FILE}]... ";
+
+$MYSQLDUMP $DB_NAME > $MYSQL_DUMP_FILE -u $DB_USER -p${DB_PASS}
+
+if [ $? -eq 0 ]; then
+	echo -en "${GREEN}[OK]${NORMAL}\n";
+else
+	echo -en "${RED}[FAILED]${NORMAL}\n";
+	exit 1;
+fi
+
+#### TAR ####
+
+echo -en "Checking if target backup directory exists... ";
+
+if [ -d ${BACKUP_DIR} ]; then
+	echo -en "${GREEN}[OK]${NORMAL}\n";
+else
+	echo -en "${YELLOW}[NOPE]${NORMAL}\n";
+	echo -en "Trying to create target backup directory... ";
+	
+	$MKDIR -p $BACKUP_DIR
+
+	if [ $? -eq 0 ]; then
+		echo -en "${GREEN}[OK]${NORMAL}\n";
+	else
+		echo -en "${RED}[FAILED]${NORMAL}\n";
+		exit 1;
+	fi
+fi
+
+echo -en "Making a tar archive... ";
+
+ARCHIVE=${BACKUP_DIR}/${SITE_ID}_`date +"%Y.%m.%d_%s"`.tar
+
+$TAR -cf $ARCHIVE -C $VHOSTS_DIR $SITE_ID &> /dev/null
+
+if [ $? -eq 0 ]; then
+	echo -en "${GREEN}[OK]${NORMAL}\n";
+else
+	echo -en "${RED}[FAILED]${NORMAL}\n";
+	exit 1;
+fi
+
+#### GZIP ####
+
+echo -en "Compressing tar archive... ";
+
+$GZIP $ARCHIVE
+
+if [ $? -eq 0 ]; then
+	echo -en "${GREEN}[OK]${NORMAL}\n";
+else
+	echo -en "${RED}[FAILED]${NORMAL}\n";
+	exit 1;
+fi
+
+#### REMOVING MYSQL DUMP ####
+
+echo -en "Removing mysql dump... ";
+
+$RM $MYSQL_DUMP_FILE
+
+if [ $? -eq 0 ]; then
+	echo -en "${GREEN}[OK]${NORMAL}\n";
+else
+	echo -en "${RED}[FAILED]${NORMAL}\n";
+	exit 1;
+fi
+
+echo -en "Finished\n";
+
+FILESIZE=$(du -m "${ARCHIVE}.gz" | cut -f1)
+echo -en "Backup file: ${GREEN}${ARCHIVE}.gz ${BLUE}${FILESIZE}Mb ${NORMAL}\n";
