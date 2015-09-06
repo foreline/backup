@@ -26,6 +26,14 @@ NORMAL='\033[0m'
 
 ################
 
+if [[ -z $DB_NAME || -z $DB_USER ]]; then
+	echo -en "${YELLOW}MySQL parameters are empty. Skipping mysqldump.${NORMAL}\n";
+	SKIP_MYSQL=true;
+else
+	SKIP_MYSQL=false;
+fi
+
+
 echo -n "Checking tools...";
 
 TAR=`which tar`
@@ -60,18 +68,20 @@ echo -en "$GREEN [OK]$NORMAL\n";
 
 ### MYSQL Dump
 
-TMP_NAME=`date +"%Y%m%d_%H%M%S"`.sql
-MYSQL_DUMP_FILE=${SITE_ID}_${TMP_NAME}
+if [ "$SKIP_MYSQL" = false ]; then
+	TMP_NAME=`date +"%Y%m%d_%H%M%S"`.sql
+	MYSQL_DUMP_FILE=${SITE_ID}_${TMP_NAME}
 
-echo -en "Creating mysql dump [${MYSQL_DUMP_FILE}]... ";
+	echo -en "Creating mysql dump [${MYSQL_DUMP_FILE}]... ";
 
-$MYSQLDUMP $DB_NAME > $MYSQL_DUMP_FILE -u $DB_USER -p${DB_PASS}
+	$MYSQLDUMP $DB_NAME > $MYSQL_DUMP_FILE -u $DB_USER -p${DB_PASS}
 
-if [ $? -eq 0 ]; then
-	echo -en "${GREEN}[OK]${NORMAL}\n";
-else
-	echo -en "${RED}[FAILED]${NORMAL}\n";
-	exit 1;
+	if [ $? -eq 0 ]; then
+		echo -en "${GREEN}[OK]${NORMAL}\n";
+	else
+		echo -en "${RED}[FAILED]${NORMAL}\n";
+		exit 1;
+	fi
 fi
 
 #### TAR ####
@@ -122,15 +132,17 @@ fi
 
 #### REMOVING MYSQL DUMP ####
 
-echo -en "Removing mysql dump... ";
+if [ "$SKIP_MYSQL" = false ]; then
+	echo -en "Removing mysql dump... ";
 
-$RM $MYSQL_DUMP_FILE
+	$RM $MYSQL_DUMP_FILE
 
-if [ $? -eq 0 ]; then
-	echo -en "${GREEN}[OK]${NORMAL}\n";
-else
-	echo -en "${RED}[FAILED]${NORMAL}\n";
-	exit 1;
+	if [ $? -eq 0 ]; then
+		echo -en "${GREEN}[OK]${NORMAL}\n";
+	else
+		echo -en "${RED}[FAILED]${NORMAL}\n";
+		exit 1;
+	fi
 fi
 
 echo -en "Finished\n";
